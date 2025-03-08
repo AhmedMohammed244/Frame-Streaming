@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Frame Extractor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css" />
+</head>
+<body>
+    <div class="container">
+        <!-- Drag and Drop Video Area with hidden file input -->
+        <div id="drag-area" class="drag-area">
+            <label for="video-input" class="file-label">Choose a video</label>
+            <input type="file" id="video-input" accept="video/*">
+            <p>Please drag and drop or select a video</p>
+        </div>
+
+        <!-- Extract Button -->
+        <button id="extract-btn" class="extract-btn">Extract</button>
+
+        <!-- Frame and Time Input -->
+        <div id="frame-selection">
+            <label for="frame-count">Number of frames: </label>
+            <input type="number" id="frame-count" placeholder="Enter number of frames">
+            <label for="frame-time">Seconds per frame: </label>
+            <input type="number" id="frame-time" placeholder="Enter seconds per frame">
+            <button id="collect-btn" class="collect-btn">Create Video</button>
+        </div>
+
+        <!-- Video Display -->
+        <div id="video-container">
+            <video id="video-screen" controls></video>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
+</body>
+</html>

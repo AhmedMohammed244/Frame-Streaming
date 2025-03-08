@@ -1,0 +1,359 @@
+main.html:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Frame Extractor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/swiper/swiper-bundle.min.css" />
+</head>
+<body>
+    <div class="container">
+        <!-- Drag and Drop Video Area with hidden file input -->
+        <div id="drag-area" class="drag-area">
+            <label for="video-input" class="file-label">Choose a video</label>
+            <input type="file" id="video-input" accept="video/*">
+            <p>Please drag and drop or select a video</p>
+        </div>
+
+        <!-- Extract Button -->
+        <button id="extract-btn" class="extract-btn">Extract</button>
+
+        <!-- Frame and Time Input -->
+        <div id="frame-selection">
+            <label for="frame-count">Number of frames: </label>
+            <input type="number" id="frame-count" placeholder="Enter number of frames">
+            <label for="frame-time">Seconds per frame: </label>
+            <input type="number" id="frame-time" placeholder="Enter seconds per frame">
+            <button id="collect-btn" class="collect-btn">Create Video</button>
+        </div>
+
+        <!-- Video Display -->
+        <div id="video-container">
+            <video id="video-screen" controls></video>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script src="https://unpkg.com/swiper/swiper-bundle.min.js"></script>
+</body>
+</html>
+
+and styles.css:
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #181818;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    width: 80%;
+    max-width: 800px;
+    text-align: center;
+}
+
+.drag-area {
+    border: 2px dashed #fff;
+    padding: 20px;
+    margin-bottom: 20px;
+    background-color: #2c2c2c;
+    cursor: pointer;
+}
+
+.drag-area p {
+    color: #aaa;
+}
+
+.extract-btn {
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.extract-btn:hover {
+    background-color: #0056b3;
+}
+
+/* Frame Selection Input */
+#frame-selection {
+    margin-top: 20px;
+}
+
+#frame-selection input {
+    margin: 5px;
+    padding: 5px;
+    width: 120px;
+}
+
+.collect-btn {
+    background-color: #28a745;
+    color: white;
+    padding: 8px 20px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+
+.collect-btn:hover {
+    background-color: #218838;
+}
+
+/* Video Display */
+#video-container {
+    margin-top: 30px;
+}
+
+#video-screen {
+    width: 100%;
+    height: 500px;  /* Adjust height as needed */
+}
+and script.js:
+// Trigger the file input when clicking on the drag area
+document.getElementById('drag-area').addEventListener('click', function() {
+    document.getElementById('video-input').click();
+});
+
+// Handle video file selection and drag-and-drop
+document.getElementById('video-input').addEventListener('change', function(event) {
+    const files = event.target.files;
+    if (files.length > 0) {
+        const videoFile = files[0];
+        if (videoFile.type.includes('video')) {
+            document.getElementById('drag-area').querySelector('p').textContent = `Video: ${videoFile.name} selected`;
+        } else {
+            alert('Please select a valid video file');
+        }
+    }
+});
+
+// Handle the extract button click
+document.getElementById('extract-btn').addEventListener('click', async function() {
+    const videoFile = document.getElementById('video-input').files[0];
+    if (!videoFile) {
+        alert('Please upload a video file first');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('video', videoFile);
+
+    try {
+        const response = await fetch('http://127.0.0.1:5000/extract-frames', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            window.framesData = data.frames;  // Store the frames data
+            alert(`Frames extracted: ${data.frames.length}`);
+        } else {
+            alert('Frame extraction failed');
+        }
+    } catch (error) {
+        console.error('Error extracting frames:', error);
+    }
+});
+
+// Handle the collect button click to generate video
+document.getElementById('collect-btn').addEventListener('click', async function() {
+    const frameCount = document.getElementById('frame-count').value;
+    const frameTime = document.getElementById('frame-time').value;
+
+    // Validate user inputs
+    if (!frameCount || !frameTime) {
+        alert('Please enter both frame count and time');
+        return;
+    }
+
+    const totalFrames = window.framesData.length;
+    const framesPerSecond = parseInt(frameCount);
+    const durationInSeconds = parseInt(frameTime);
+
+    if (framesPerSecond * durationInSeconds > totalFrames) {
+        alert('The total number of frames exceeds available frames. Please reduce the time or frame count.');
+        return;
+    }
+
+    // Send the request to generate the video stream
+    try {
+        const response = await fetch('http://127.0.0.1:5000/generate-video', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                frames: window.framesData.slice(0, framesPerSecond * durationInSeconds),
+                frameRate: framesPerSecond,
+                duration: durationInSeconds
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            const videoElement = document.getElementById('video-screen');
+            videoElement.src = data.videoUrl;  // Display video URL
+            videoElement.play();
+        } else {
+            alert('Failed to create video');
+        }
+    } catch (error) {
+        console.error('Error generating video:', error);
+    }
+});
+and app.js (backend):
+const express = require("express");
+const multer = require("multer");
+const cors = require("cors");
+const fs = require("fs-extra");
+const path = require("path");
+const ffmpeg = require("fluent-ffmpeg");
+
+const app = express();
+const PORT = 5000;
+
+// Enable CORS
+app.use(cors());
+app.use(express.static("public"));
+app.use(express.json());
+
+// Define storage for uploaded files
+const upload = multer({ dest: "uploads/" });
+
+// Path to store extracted frames and the final video
+const FRAMES_FOLDER = path.join(__dirname, "public", "frames");
+const VIDEO_FOLDER = path.join(__dirname, "public", "videos");
+
+// Ensure directories exist
+fs.ensureDirSync(FRAMES_FOLDER);
+fs.ensureDirSync(VIDEO_FOLDER);
+
+// Allowed video file extensions
+const ALLOWED_EXTENSIONS = new Set(["mp4", "mov", "avi", "mkv", "flv"]);
+
+const isValidFile = (filename) => {
+    return ALLOWED_EXTENSIONS.has(path.extname(filename).toLowerCase().substring(1));
+};
+
+// Serve the main HTML page
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "main.html"));
+});
+
+// Serve extracted frames and videos
+app.use("/frames", express.static(FRAMES_FOLDER));
+app.use("/videos", express.static(VIDEO_FOLDER));
+
+// Function to get the video's FPS dynamically
+const getVideoFPS = (videoPath) => {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(videoPath, (err, metadata) => {
+            if (err) return reject(err);
+            const fps = metadata.streams.find(s => s.codec_type === "video")?.r_frame_rate;
+            if (!fps) return reject("FPS not found");
+            
+            const fpsValue = eval(fps); 
+            resolve(fpsValue);
+        });
+    });
+};
+
+// Handle video upload and frame extraction
+app.post("/extract-frames", upload.single("video"), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ success: false, message: "No file uploaded" });
+    }
+
+    const videoFilePath = req.file.path;
+    const videoFilename = req.file.originalname;
+
+    if (!isValidFile(videoFilename)) {
+        return res.status(400).json({ success: false, message: "Invalid file type" });
+    }
+
+    try {
+        // Clear old frames before extracting new ones
+        fs.emptyDirSync(FRAMES_FOLDER);
+
+        // Get actual FPS dynamically
+        const fps = await getVideoFPS(videoFilePath);
+
+        // Extract frames using FFmpeg with dynamic FPS
+        const outputPattern = path.join(FRAMES_FOLDER, "frame_%04d.jpg");
+
+        await new Promise((resolve, reject) => {
+            ffmpeg(videoFilePath)
+                .output(outputPattern)
+                .outputOptions([`-vf`, `fps=${fps}`]) // Use detected FPS
+                .on("end", resolve)
+                .on("error", reject)
+                .run();
+        });
+
+        // Get extracted frame filenames
+        const frames = fs.readdirSync(FRAMES_FOLDER).map(file => `/frames/${file}`);
+
+        // Cleanup uploaded video
+        fs.unlinkSync(videoFilePath);
+
+        res.json({ success: true, frames });
+    } catch (error) {
+        console.error("Error extracting frames:", error);
+        res.status(500).json({ success: false, message: "Frame extraction failed" });
+    }
+});
+
+// Generate video from selected frames
+app.post("/generate-video", async (req, res) => {
+    const { frames, frameRate, duration } = req.body;
+    
+    const outputVideoPath = path.join(VIDEO_FOLDER, `generated_video_${Date.now()}.mp4`);
+
+    // Create a temporary file with frame paths for ffmpeg
+    const framePaths = frames.map(frame => path.join(__dirname, 'public', frame));
+    
+    try {
+        await new Promise((resolve, reject) => {
+            ffmpeg()
+                .input(`concat:${framePaths.join('|')}`)
+                .inputOptions('-f image2pipe')
+                .output(outputVideoPath)
+                .outputOptions('-r', frameRate)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+
+        res.json({ success: true, videoUrl: `/videos/${path.basename(outputVideoPath)}` });
+    } catch (error) {
+        console.error("Error generating video:", error);
+        res.status(500).json({ success: false, message: "Video generation failed" });
+    }
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on http://127.0.0.1:${PORT}`);
+});
+
+
+updates:
+1) i want when select the number of frames (ex: i extracted 30 frames, when select 10 frames and the time is 1 sec then i want the video display on the screen area 10 fps and when select the time 2s then the video display the 10 + 10 = 20 frames in 2 seconds and when select the time 3s then the video display 10+10+10 = 30 frames in 3 seconds but when select 4s then say message no frames remaining) then i want spread the number of frames in selected time 
+
+2) if extracted 32 frames, when select 10 frames and select 4 seconds then should be the 10 + 10 + 10 + 2(remaining frame) = 32
+
+3) if extracted 131 frames, when select 20 frames and time 5 then should 20 + 20 + 20 + 20 + 20 = 100 frames per 5 second, and make time 7 seconds then should 20 + 20 + 20 + 20 + 20 + 20 = 120 frames in 6 seconds but the remaining frames not equal 20 then make in last second the remaining frames to make in final 131 frames per 7 seconds but 8 seconds not vaild because no frames remaining 
